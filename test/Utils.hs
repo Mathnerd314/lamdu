@@ -186,10 +186,10 @@ doInfer_ = (first . fmap) fst . doInfer
 
 factorialExpr :: Data.Expression (DefI t) ()
 factorialExpr =
-  pureLambda "x" Data.pureHole $
+  pureLambda "x" hole $
   pureApply
   [ pureGetDef "if"
-  , Data.pureHole
+  , hole
   , pureApply [pureGetDef "==", pureGetParam "x", literalInt 0]
   , literalInt 1
   , pureApply

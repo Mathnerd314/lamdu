@@ -504,12 +504,44 @@ failResumptionAddsRules =
       pureLambda "x" (purePi "" hole hole) $
       pureApply [makeParameterRef "x", hole, hole]
 
+simpleRedex ::
+  String -> Data.Expression def () -> Data.Expression def () -> Data.Expression def ()
+simpleRedex name val expr =
+  Data.pureApply (pureLambda name Data.pureHole expr) val
+
+idWithRedex :: HUnit.Test
+idWithRedex =
+  testInfer "id with redex"
+  (( pureLambda "a" hole
+   . pureLambda "x" (pureGetParam "a")
+   ) (simpleRedex "w" hole (pureGetParam "x")))
+  axxInf
+  where
+    axxVal = pureLambda "a" setType xxVal
+    axxTyp = purePi "a" setType xxTyp
+    axxInf =
+      mkInferredNode axxVal axxTyp $
+      makeNamedLambda "a" (mkInferredNode setType setType Data.hole) xxInf
+    xxVal = pureLambda "x" xTyp xVal
+    xxTyp = purePi "x" xTyp xTyp
+    xxInf =
+      mkInferredNode xxVal xxTyp $
+      makeNamedLambda "x" xTypInf xInf
+    xVal = pureGetParam "x"
+    xTypInf = mkInferredGetParam "a" setType
+    xTyp = pureGetParam "a"
+    xInf =
+      mkInferredNode xVal xTyp $
+      -- TODO: Yuck
+      mkInferredGetParam "x" xTyp ^. Data.eValue
+
 
 hunitTests :: HUnit.Test
 hunitTests =
   HUnit.TestList $
   simpleTests ++
-  [ applyIntToBoolFuncWithHole
+  [ idWithRedex
+  , applyIntToBoolFuncWithHole
   , applyOnVar
   , idTest
   , argTypeGoesToPi
