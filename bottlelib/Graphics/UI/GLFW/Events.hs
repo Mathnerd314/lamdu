@@ -62,26 +62,33 @@ atomicModifyIORef_ var f = atomicModifyIORef var ((, ()) . f)
 rawEventLoop :: ([GLFWRawEvent] -> IO ()) -> IO a
 rawEventLoop eventsHandler = do
   eventsVar <- newIORef []
-
   let
     addEvent event = atomicModifyIORef_ eventsVar (event:)
     addKeyEvent key isPress = addEvent $ RawKeyEvent (isPressFromBool isPress) key
     charEventHandler char isPress
       | '\57344' <= char && char <= '\63743' = return () -- Range for "key" characters (keys for left key, right key, etc.)
       | otherwise = addEvent $ RawCharEvent (isPressFromBool isPress) char
-
   GLFW.setCharCallback charEventHandler
   GLFW.setKeyCallback addKeyEvent
   GLFW.setWindowRefreshCallback $ addEvent RawWindowRefresh
   GLFW.setWindowSizeCallback . const . const $ addEvent RawWindowRefresh
   GLFW.setWindowCloseCallback $ addEvent RawWindowClose >> return True
-
   forever $ do
-    GLFW.pollEvents
-    let handleReversedEvents rEvents = ([], reverse rEvents)
-    events <- atomicModifyIORef eventsVar handleReversedEvents
-    eventsHandler events
-    GLFW.swapBuffers
+    {-# SCC loopPoll #-} pollIt
+    {-# SCC loopHandle #-} handleIt eventsVar eventsHandler
+    {-# SCC loopSwap #-} swapIt
+
+{-# NOINLINE handleIt #-}
+handleIt eventsVar x = {-# SCC handleIt #-} x =<< atomicModifyIORef eventsVar handleReversedEvents
+
+{-# NOINLINE handleReversedEvents #-}
+handleReversedEvents = {-# SCC handleReversedEvents #-} (,) [] . reverse
+
+{-# NOINLINE pollIt #-}
+pollIt = {-# SCC pollIt #-} GLFW.pollEvents
+
+{-# NOINLINE swapIt #-}
+swapIt = {-# SCC swapIt #-} GLFW.swapBuffers
 
 modKeyHandlerWrap ::
   ([(ModState, GLFWRawEvent)] -> IO ()) ->
