@@ -59,20 +59,20 @@ translate ((_, RawCharEvent _ _) : xs) = translate xs
 atomicModifyIORef_ :: IORef a -> (a -> a) -> IO ()
 atomicModifyIORef_ var f = atomicModifyIORef var ((, ()) . f)
 
+addEvent eventsVar event = atomicModifyIORef_ eventsVar (event:)
+addKeyEvent eventsVar key isPress = addEvent eventsVar $ RawKeyEvent (isPressFromBool isPress) key
+charEventHandler eventsVar char isPress
+  | '\57344' <= char && char <= '\63743' = return () -- Range for "key" characters (keys for left key, right key, etc.)
+  | otherwise = addEvent eventsVar $ RawCharEvent (isPressFromBool isPress) char
+
 rawEventLoop :: ([GLFWRawEvent] -> IO ()) -> IO a
 rawEventLoop eventsHandler = do
   eventsVar <- newIORef []
-  let
-    addEvent event = atomicModifyIORef_ eventsVar (event:)
-    addKeyEvent key isPress = addEvent $ RawKeyEvent (isPressFromBool isPress) key
-    charEventHandler char isPress
-      | '\57344' <= char && char <= '\63743' = return () -- Range for "key" characters (keys for left key, right key, etc.)
-      | otherwise = addEvent $ RawCharEvent (isPressFromBool isPress) char
-  GLFW.setCharCallback charEventHandler
-  GLFW.setKeyCallback addKeyEvent
-  GLFW.setWindowRefreshCallback $ addEvent RawWindowRefresh
-  GLFW.setWindowSizeCallback . const . const $ addEvent RawWindowRefresh
-  GLFW.setWindowCloseCallback $ addEvent RawWindowClose >> return True
+  GLFW.setCharCallback $ charEventHandler eventsVar
+  GLFW.setKeyCallback $ addKeyEvent eventsVar
+  GLFW.setWindowRefreshCallback $ addEvent eventsVar RawWindowRefresh
+  GLFW.setWindowSizeCallback . const . const $ addEvent eventsVar RawWindowRefresh
+  GLFW.setWindowCloseCallback $ addEvent eventsVar RawWindowClose >> return True
   forever $ do
     {-# SCC loopPoll #-} pollIt
     {-# SCC loopHandle #-} handleIt eventsVar eventsHandler

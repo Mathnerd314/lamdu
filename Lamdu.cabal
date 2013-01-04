@@ -94,8 +94,8 @@ Library
                        transformers >= 0.2.1,
                        utf8-string >= 0.3
 
-  ghc-options:         -O2 -Wall
-  ghc-prof-options:    -Wall -auto-all -caf-all -rtsopts
+  ghc-options:         -O0 -Wall
+  ghc-prof-options:    -auto-all -caf-all -rtsopts
 
 Executable lamdu
   hs-Source-Dirs:      src
@@ -168,8 +168,8 @@ Executable lamdu
                        Lamdu.WidgetEnvT,
                        Lamdu.WidgetIds,
                        Paths_lamdu
-  ghc-options:         -O2 -Wall
-  ghc-prof-options:    -Wall -auto-all -caf-all -rtsopts
+  ghc-options:         -O0 -Wall
+  ghc-prof-options:    -auto-all -caf-all -rtsopts
   main-is:             Lamdu/Main.hs
 
 source-repository head
