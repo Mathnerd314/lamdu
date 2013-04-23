@@ -47,7 +47,8 @@ data RuleClosure def
   | PiToLambdaClosure (Guid, ExprRef, ExprRef) Origin3
   | RecordValToTypeClosure ([Expression.FieldTag], ExprRef) Origin
   | RecordTypeToFieldTypesClosure [(Expression.FieldTag, ExprRef)]
-  | RecordTypeToGetFieldTypeClosure (ExprRef, ExprRef) Origin2
+  | RecordTypeToGetFieldTypeClosure ExprRef
+  | GetFieldTypeToRecordFieldTypeClosure ExprRef Origin2
   | CopyClosure ExprRef
   | LambdaParentToChildrenClosure (Expression.Lambda ExprRef)
   | LambdaChildrenToParentClosure (Expression.Kind, Guid, ExprRef) Origin
@@ -88,8 +89,10 @@ runClosure closure =
     runRecordValToTypeClosure x o
   RecordTypeToFieldTypesClosure x ->
     runRecordTypeToFieldTypesClosure x
-  RecordTypeToGetFieldTypeClosure x o ->
-    runRecordTypeToGetFieldTypeClosure x o
+  RecordTypeToGetFieldTypeClosure x ->
+    runRecordTypeToGetFieldTypeClosure x
+  GetFieldTypeToRecordFieldTypeClosure x o ->
+    runGetFieldTypeToRecordFieldTypeClosure x o
   CopyClosure x ->
     runCopyClosure x
   LambdaParentToChildrenClosure x ->
@@ -225,10 +228,21 @@ runRecordTypeToFieldTypesClosure fieldTypeRefs ~[recordTypeExpr] = do
     recordTypeExpr ^.. Expression.eBody . Expression._BodyRecord
   maybe [] (map snd) $ AssocList.match (,) fieldTypeRefs fieldTypeExprs
 
-runRecordTypeToGetFieldTypeClosure :: (ExprRef, ExprRef) -> Origin2 -> RuleFunction def
-runRecordTypeToGetFieldTypeClosure (getFieldTypeRef, recordTypeRef) (o0, o1) ~[recordTypeExpr, getFieldValExpr] = do
-  Expression.GetField fieldTag _ <-
-    getFieldValExpr ^.. Expression.eBody . Expression._BodyGetField
+getFieldTag :: Lens.Traversal' (Expression.Expression def a) Expression.FieldTag
+getFieldTag = Expression.eBody . Expression._BodyGetField . Expression.getFieldTag
+
+runRecordTypeToGetFieldTypeClosure :: ExprRef -> RuleFunction def
+runRecordTypeToGetFieldTypeClosure getFieldTypeRef ~[recordTypeExpr, getFieldValExpr] = do
+  fieldTag <- getFieldValExpr ^.. getFieldTag
+  case recordTypeExpr ^. Expression.eBody of
+    Expression.BodyRecord (Expression.Record Expression.Type fields)
+      | Just fieldType <- lookup fieldTag fields
+        -> [(getFieldTypeRef, fieldType)]
+    _ -> []
+
+runGetFieldTypeToRecordFieldTypeClosure :: ExprRef -> Origin2 -> RuleFunction def
+runGetFieldTypeToRecordFieldTypeClosure recordTypeRef (o0, o1) ~[recordTypeExpr, getFieldValExpr, getFieldTypeExpr] = do
+  fieldTag <- getFieldValExpr ^.. getFieldTag
   let
     recordTypeExample =
       makeRefExpr o0 . Expression.BodyRecord . Expression.Record Expression.Type $
@@ -237,8 +251,14 @@ runRecordTypeToGetFieldTypeClosure (getFieldTypeRef, recordTypeRef) (o0, o1) ~[r
   case recordTypeExpr ^. Expression.eBody of
     Expression.BodyLeaf Expression.Hole -> []
     Expression.BodyRecord (Expression.Record Expression.Type fields)
-      | Just fieldType <- lookup fieldTag fields
-        -> [(getFieldTypeRef, fieldType)]
+      | Lens.notNullOf Expression._FieldTag fieldTag &&
+        any ((fieldTag ==) . fst) fields ->
+        [ ( recordTypeRef
+          , recordTypeExpr &
+            Expression.eBody . Expression._BodyRecord .
+            Expression.recordFields . AssocList.at fieldTag .~
+            getFieldTypeExpr
+          )]
       | any (matchFieldTag fieldTag . fst) fields -> []
     _ -> makeError
 
@@ -250,9 +270,10 @@ matchFieldTag (Expression.FieldTag x) (Expression.FieldTag y) = x == y
 getFieldRules :: TypedValue -> ExprRef -> State Origin [Rule def]
 getFieldRules (TypedValue valRef typeRef) recordTypeRef =
   sequenceA
-  [ Rule [recordTypeRef, valRef] .
-    RecordTypeToGetFieldTypeClosure (typeRef, recordTypeRef) <$>
-    mkOrigin2
+  [ pure . Rule [recordTypeRef, valRef] $
+    RecordTypeToGetFieldTypeClosure typeRef
+  , Rule [recordTypeRef, valRef, typeRef] .
+    GetFieldTypeToRecordFieldTypeClosure recordTypeRef <$> mkOrigin2
   ]
 
 recordValueRules :: ExprRef -> [(Expression.FieldTag, ExprRef)] -> State Origin [Rule def]
