@@ -137,6 +137,9 @@ makeForNode (Expression.Expression exprBody typedVal) =
     (++)
     <$> recordKindRules record
     <*> recordStructureRules (tvVal typedVal) (fmap tvVal record)
+  Expression.BodyGetField getField ->
+    -- TODO: GetField Rules
+    pure []
   -- Leafs need no additional rules beyond the commonal simpleTypeRule
   Expression.BodyLeaf _ -> pure []
   where
@@ -343,7 +346,8 @@ runSimpleTypeClosure typ (o0, o1) ~[valExpr] =
   -- external information which is not used in the simple type rules.
   Expression.BodyLeaf Expression.GetVariable {} -> []
   Expression.BodyLeaf Expression.Hole {} -> []
-  Expression.BodyApply _ -> []
+  Expression.BodyApply {} -> []
+  Expression.BodyGetField {} -> []
   where
     simpleType = [(typ, setExpr o0)]
 
