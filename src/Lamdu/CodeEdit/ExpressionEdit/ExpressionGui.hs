@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Lamdu.CodeEdit.ExpressionEdit.ExpressionGui
-  ( ExpressionGui(..), egWidget
+  ( ExpressionGui(..), egWidget, egAlignment
   , fromValueWidget
-  , hbox, hboxSpaced, addBelow
+  , hbox, hboxSpaced, addBelow, verticalAddAround
+  , horizontalAddAround
   , addType -- TODO: s/type/info
   , TypeStyle(..)
   , MyPrecedence(..), ParentPrecedence(..), Precedence
@@ -84,10 +85,28 @@ addBelow ::
   [(Box.Alignment, WidgetT m)] ->
   ExpressionGui m ->
   ExpressionGui m
-addBelow egHAlign ws eg =
+addBelow egHAlign ws eg = verticalAddAround egHAlign [] eg ws
+
+verticalAddAround ::
+  Widget.R -> 
+  [(Box.Alignment, WidgetT m)] -> ExpressionGui m ->
+  [(Box.Alignment, WidgetT m)] ->
+  ExpressionGui m
+verticalAddAround egHAlign above eg below =
   fromBox . Box.makeKeyed Box.vertical $
+  map ((,) False) above ++
   (True, (Vector2 egHAlign (eg ^. egAlignment), eg ^. egWidget)) :
-  map ((,) False) ws
+  map ((,) False) below
+
+horizontalAddAround ::
+  [(Box.Alignment, WidgetT m)] -> ExpressionGui m ->
+  [(Box.Alignment, WidgetT m)] ->
+  ExpressionGui m
+horizontalAddAround lefts eg rights =
+  fromBox . Box.makeKeyed Box.horizontal $
+  map ((,) False) lefts ++
+  (True, (Vector2 0 (eg ^. egAlignment), eg ^. egWidget)) :
+  map ((,) False) rights
 
 data TypeStyle = HorizLine | Background
 
